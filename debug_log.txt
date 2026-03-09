@@ -1,0 +1,11 @@
+Start
+Error: No module named 'openpyxl'
+Traceback (most recent call last):
+  File "<string>", line 5, in <module>
+  File "D:\Проекты\RUN-RAY\main.py", line 16, in <module>
+    from bot.handlers.schedule import schedule_command, receive_document, receive_week_date
+  File "D:\Проекты\RUN-RAY\bot\handlers\schedule.py", line 14, in <module>
+    from bot.services.excel_parser import parse_schedule_excel
+  File "D:\Проекты\RUN-RAY\bot\services\excel_parser.py", line 7, in <module>
+    import openpyxl
+ModuleNotFoundError: No module named 'openpyxl'

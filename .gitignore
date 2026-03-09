@@ -1,0 +1,35 @@
+# Секреты
+.env
+*.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# База данных (локальная)
+*.db
+bot.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Логи
+*.log
+startup_log.txt
+run_output.txt
+
+# Системные файлы
+.DS_Store
+Thumbs.db
