@@ -13,6 +13,7 @@ from bot.config import (
 )
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule, Confirmation, WorkGroup
+from bot.utils import get_local_today, get_local_now
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ async def send_reminders_for_time(shift_start: time, app=None) -> None:
         return
 
     init_db()
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         schedules = session.query(Schedule).filter(
             Schedule.date == today,
@@ -103,7 +104,7 @@ async def send_late_reminder(shift_start: time) -> None:
         return
 
     init_db()
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         schedules = session.query(Schedule).filter(
             Schedule.date == today,
@@ -137,11 +138,11 @@ async def send_late_reminder(shift_start: time) -> None:
 
 async def job_reminders() -> None:
     """Проверяет расписание и отправляет напоминания: в начале смены и через 7 мин тем, кто не подтвердил."""
-    now = datetime.now()
+    now = get_local_now()
     current_min = now.hour * 60 + now.minute
 
     init_db()
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         times = session.query(Schedule.shift_start).filter(
             Schedule.date == today,
@@ -165,7 +166,7 @@ async def job_weekly_report() -> None:
     if not app or not BOT_TOKEN:
         return
 
-    now = datetime.now()
+    now = get_local_now()
     end_date = now.date()
     start_date = end_date - timedelta(days=6)
 

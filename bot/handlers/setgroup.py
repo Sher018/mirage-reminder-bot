@@ -1,12 +1,12 @@
 """Команда /setgroup — сохранить группу для напоминаний."""
 import logging
-from datetime import datetime
 from contextlib import contextmanager
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
 from bot.config import ADMIN_IDS
+from bot.utils import get_local_now
 from bot.database import SessionLocal, init_db
 from bot.models import WorkGroup
 
@@ -45,7 +45,7 @@ async def setgroup_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     init_db()
     with get_db() as session:
         wg = session.query(WorkGroup).first()
-        now = datetime.now()
+        now = get_local_now()
         if wg:
             wg.chat_id = chat_id
             wg.updated_at = now

@@ -1,5 +1,9 @@
 """Парсинг Excel-файла с расписанием."""
 from datetime import date, time, datetime, timedelta
+
+def _local_year():
+    from bot.utils import get_local_now
+    return get_local_now().year
 from io import BytesIO
 import re
 from typing import Optional
@@ -137,7 +141,7 @@ def find_week_start(rows: list) -> Optional[date]:
             if m:
                 try:
                     day, month = int(m.group(1)), int(m.group(2))
-                    year = int(m.group(3)) if m.group(3) else datetime.now().year
+                    year = int(m.group(3)) if m.group(3) else _local_year()
                     if year < 100:
                         year += 2000
                     d = date(year, month, day)

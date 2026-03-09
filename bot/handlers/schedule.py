@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes, filters
 from sqlalchemy.orm import Session
 
 from bot.config import ADMIN_IDS
+from bot.utils import get_local_now
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule
 from bot.services.excel_parser import parse_schedule_excel
@@ -43,7 +44,7 @@ def parse_week_date(text: str):
         try:
             d = datetime.strptime(text, fmt)
             if fmt == "%d.%m":
-                d = d.replace(year=datetime.now().year)
+                d = d.replace(year=get_local_now().year)
             monday = d.date() - timedelta(days=d.weekday())
             return monday
         except ValueError:
@@ -151,7 +152,7 @@ async def _save_schedule_and_reply(update: Update, context, records: list) -> No
     init_db()
     with get_db() as session:
         session.query(Schedule).delete()
-        now = datetime.now()
+        now = get_local_now()
         for r in records:
             s = Schedule(
                 date=r["date"],

@@ -8,6 +8,7 @@ from telegram.ext import ContextTypes, MessageHandler, filters
 from sqlalchemy.orm import Session
 
 from bot.config import ADMIN_IDS, RESTAURANT_LAT, RESTAURANT_LON, GEO_RADIUS_M, CONFIRM_WINDOW_MINUTES
+from bot.utils import get_local_now
 from bot.database import SessionLocal
 from bot.models import Schedule, Confirmation
 from bot.services.geo_validator import is_location_valid
@@ -94,7 +95,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if not username.startswith("@"):
         username = f"@{username}"
 
-    now = datetime.now()
+    now = get_local_now()
     chat_date = now.date()
     chat_time = now.time()
 

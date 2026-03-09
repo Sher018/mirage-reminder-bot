@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler
 from bot.config import ADMIN_IDS, CONFIRM_WINDOW_MINUTES
 from bot.database import SessionLocal
 from bot.models import Schedule, Confirmation
+from bot.utils import get_local_today, get_local_now
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ def is_admin(user_id: int) -> bool:
 
 async def cmd_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Кто сегодня работает (по сменам)."""
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
 
@@ -108,7 +109,7 @@ async def cmd_next_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.message.reply_text("❌ Только для администратора.")
         return
 
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         schedules = session.query(Schedule).filter(
             Schedule.date > today,
@@ -144,8 +145,8 @@ async def cmd_next_days(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Кто подтвердил, кто нет (для текущей смены/дня)."""
-    today = date.today()
-    now = datetime.now()
+    today = get_local_today()
+    now = get_local_now()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
         confirmed_ids = {c.schedule_id for c in session.query(Confirmation).filter(
@@ -181,7 +182,7 @@ async def callback_today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
     await query.answer()
 
-    today = date.today()
+    today = get_local_today()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
 
@@ -219,8 +220,8 @@ async def callback_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     await query.answer()
 
-    today = date.today()
-    now = datetime.now()
+    today = get_local_today()
+    now = get_local_now()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
         confirmed_ids = {c.schedule_id for c in session.query(Confirmation).filter(

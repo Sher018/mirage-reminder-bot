@@ -1,6 +1,6 @@
 """Утилиты для работы с группой: /groupid, /test, /remind."""
 import logging
-from datetime import date, datetime, timedelta
+from datetime import timedelta
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
@@ -9,6 +9,7 @@ from bot.config import ADMIN_IDS, CONFIRM_WINDOW_MINUTES
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule
 from bot.services.scheduler import get_group_chat_id
+from bot.utils import get_local_today
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     try:
         init_db()
-        today = date.today()
+        today = get_local_today()
         session = SessionLocal()
         schedules = session.query(Schedule).filter(Schedule.date == today).limit(3).all()
         session.close()
@@ -141,7 +142,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     init_db()
-    today = date.today()
+    today = get_local_today()
     session = SessionLocal()
     schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
     session.close()
@@ -172,7 +173,7 @@ async def remind_tomorrow_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text("❌ Группа не сохранена. Выполните /setgroup в группе.")
         return
 
-    tomorrow = date.today() + timedelta(days=1)
+    tomorrow = get_local_today() + timedelta(days=1)
     init_db()
     session = SessionLocal()
     schedules = session.query(Schedule).filter(Schedule.date == tomorrow).order_by(Schedule.shift_start).all()

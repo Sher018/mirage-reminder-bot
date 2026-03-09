@@ -28,3 +28,6 @@ REMINDER_TIMES = [REMINDER_1, REMINDER_2, REMINDER_3, REMINDER_4]
 # Недельный отчёт админу
 WEEKLY_REPORT_DAY = int(os.getenv("WEEKLY_REPORT_DAY", "0"))  # 0=Вс, 1=Пн, ..., 6=Сб
 WEEKLY_REPORT_TIME = os.getenv("WEEKLY_REPORT_TIME", "00:00")
+
+# Часовой пояс (сервер в UTC, бот для Иркутска)
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Irkutsk")
