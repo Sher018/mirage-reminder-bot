@@ -1,0 +1,17 @@
+# Запуск бота через Docker Compose
+# Использование: docker-compose up -d
+# Переменные задайте в .env или в environment
+
+version: "3.8"
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_PATH=/data/bot.db
+    volumes:
+      - bot_data:/data
+
+volumes:
+  bot_data:

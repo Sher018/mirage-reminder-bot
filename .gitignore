@@ -25,10 +25,12 @@ bot.db
 *.swp
 *.swo
 
-# Логи
+# Логи и отладка
 *.log
 startup_log.txt
 run_output.txt
+debug_out.txt
+debug_log.txt
 
 # Системные файлы
 .DS_Store

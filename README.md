@@ -52,6 +52,12 @@
 4. Получить новый токен
 5. Обновить `BOT_TOKEN` в файле `.env`
 
+## Деплой на сервер
+
+- **Amvera Cloud:** [DEPLOY_AMVERA.md](DEPLOY_AMVERA.md), [AMVERA_ИНСТРУКЦИЯ.md](AMVERA_ИНСТРУКЦИЯ.md)
+- **Docker / VPS:** [SERVER_README.md](SERVER_README.md)
+- Шаблон переменных: `.env.example`
+
 ## Документация
 
 Подробный план проекта: [PROJECT_PLAN.md](PROJECT_PLAN.md)
