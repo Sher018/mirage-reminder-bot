@@ -12,5 +12,5 @@ build:
   useCache: true
 
 run:
-  scriptName: main.py
+  scriptName: app.py
   persistenceMount: /data
