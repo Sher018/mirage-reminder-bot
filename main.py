@@ -10,7 +10,8 @@ def _log(s: str) -> None:
 _log("Загрузка модулей...")
 
 from telegram import Update, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+from telegram.error import BadRequest
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 from bot.config import BOT_TOKEN, ADMIN_IDS
 from bot.database import init_db
@@ -70,7 +71,16 @@ def main() -> None:
             BotCommand("check", "Проверка настроек"),
         ])
 
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        """Обработка ошибок: 'Message to be replied not found' — не падать."""
+        err = context.error
+        if isinstance(err, BadRequest) and "message to be replied not found" in str(err).lower():
+            logger.warning("Сообщение для ответа удалено или недоступно: %s", err)
+            return
+        logger.exception("Ошибка в обработчике: %s", err)
+
     app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
+    app.add_error_handler(error_handler)
 
     # Команды
     app.add_handler(CommandHandler("start", start))
