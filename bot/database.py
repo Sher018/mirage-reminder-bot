@@ -9,6 +9,10 @@ Base = declarative_base()
 DB_PATH = os.getenv("DATABASE_PATH") or os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "bot.db"
 )
+# Создать родительскую папку (на Amvera /data может не существовать при первом запуске)
+db_dir = os.path.dirname(DB_PATH)
+if db_dir:
+    os.makedirs(db_dir, exist_ok=True)
 DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(DATABASE_URL, echo=False)
