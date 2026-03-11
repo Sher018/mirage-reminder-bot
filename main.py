@@ -148,6 +148,17 @@ def main() -> None:
     app.add_handler(MessageHandler(filters.LOCATION & group_filter, handle_location))
     app.add_handler(MessageHandler(filters.PHOTO & group_filter, handle_photo))
 
+    # Диагностика: лог всех сообщений в группе (кроме location/photo — они выше)
+    async def debug_group_msg(update: Update, context) -> None:
+        if not update.message or not update.effective_user:
+            return
+        u = update.effective_user
+        txt = (update.message.text or "")[:30]
+        logger.info("ГРУППА: user_id=%s @%s текст=%r", u.id, u.username or u.first_name or "?", txt)
+        if txt.lower() in ("тест", "проверка", "check"):
+            await update.message.reply_text("✅ Бот получил ваше сообщение — связь работает!")
+    app.add_handler(MessageHandler(group_filter & filters.TEXT, debug_group_msg))
+
     # Inline-кнопки (только в личке админа)
     app.add_handler(CallbackQueryHandler(callback_button))
 

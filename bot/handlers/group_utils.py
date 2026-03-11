@@ -30,7 +30,7 @@ def _format_schedule_with_request(schedules: list) -> str:
 
     lines.append("")
     lines.append("Подтвердите присутствие:")
-    lines.append("• Геолокация — обязательно")
+    lines.append("• Геолокация — обязательно (ответьте на это сообщение)")
     lines.append("• Фото — по желанию")
     return "\n".join(lines)
 
@@ -210,7 +210,9 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     text += (
         "⚠️ **Group Privacy** (в @BotFather):\n"
         "Должен быть **выключен** (Turn off).\n"
-        "Иначе бот не получит фото и геолокацию от работников.\n\n"
-        "🧪 Команда /test — проверить отправку в группу."
+        "Иначе бот не получит геолокацию от работников.\n\n"
+        "🧪 **Тест связи:** пусть работник напишет в группе «тест» или «проверка» — бот ответит, если получает сообщения.\n\n"
+        "💡 **Обходной путь:** пусть работники **отвечают на сообщение бота** геолокацией.\n\n"
+        "Команда /test — проверить отправку в группу."
     )
     await update.message.reply_text(text, parse_mode="Markdown")
