@@ -12,7 +12,7 @@ _group_id = os.getenv("GROUP_ID")
 GROUP_ID = int(_group_id) if _group_id and _group_id.strip() else None
 RESTAURANT_LAT = float(os.getenv("RESTAURANT_LAT", "52.2758"))
 RESTAURANT_LON = float(os.getenv("RESTAURANT_LON", "104.2774"))
-GEO_RADIUS_M = int(os.getenv("GEO_RADIUS_M", "200"))
+GEO_RADIUS_M = int(os.getenv("GEO_RADIUS_M", "500"))
 CONFIRM_WINDOW_MINUTES = int(os.getenv("CONFIRM_WINDOW_MINUTES", "15"))
 # Через сколько минут — повторное напоминание тем, кто не подтвердил
 LATE_REMINDER_MINUTES = int(os.getenv("LATE_REMINDER_MINUTES", "7"))
@@ -30,4 +30,5 @@ WEEKLY_REPORT_DAY = int(os.getenv("WEEKLY_REPORT_DAY", "0"))  # 0=Вс, 1=Пн, 
 WEEKLY_REPORT_TIME = os.getenv("WEEKLY_REPORT_TIME", "00:00")
 
 # Часовой пояс (сервер в UTC, бот для Иркутска)
+# Asia/Irkutsk = UTC+8, Europe/Moscow = UTC+3
 TIMEZONE = os.getenv("TIMEZONE", "Asia/Irkutsk")

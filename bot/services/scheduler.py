@@ -136,23 +136,46 @@ async def send_late_reminder(shift_start: time) -> None:
         logger.exception("Ошибка отправки повторного напоминания: %s", e)
 
 
+# Кэш отправленных напоминаний за текущий день, чтобы не дублировать при расширенном окне
+_sent_first_reminder: set[tuple[date, time]] = set()
+
+
+def _clear_sent_cache_if_new_day(today: date) -> None:
+    """Очищает кэш при смене дня."""
+    global _sent_first_reminder
+    if not _sent_first_reminder:
+        return
+    # Если в кэше есть даты не сегодня — очищаем
+    if any(d != today for d, _ in _sent_first_reminder):
+        _sent_first_reminder = set()
+
+
 async def job_reminders() -> None:
     """Проверяет расписание и отправляет напоминания: в начале смены и через 7 мин тем, кто не подтвердил."""
     now = get_local_now()
+    today = get_local_today()
     current_min = now.hour * 60 + now.minute
 
     init_db()
-    today = get_local_today()
     with get_db() as session:
         times = session.query(Schedule.shift_start).filter(
             Schedule.date == today,
         ).distinct().all()
 
-    for (t,) in times:
+    _clear_sent_cache_if_new_day(today)
+    times_list = [t for (t,) in times]
+
+    if not times_list:
+        logger.debug("job_reminders: нет смен на %s (локальное время %s)", today, now.strftime("%H:%M"))
+        return
+
+    for t in times_list:
         start_min = t.hour * 60 + t.minute
-        # В начале смены — первое напоминание
-        if current_min == start_min:
-            await send_reminders_for_time(t)
+        # В начале смены (или в первые 2 мин) — первое напоминание
+        if start_min <= current_min < start_min + 2:
+            if (today, t) not in _sent_first_reminder:
+                await send_reminders_for_time(t)
+                _sent_first_reminder.add((today, t))
             break
         # Через 7 мин — повторное напоминание тем, кто не подтвердил
         if current_min == start_min + LATE_REMINDER_MINUTES:

@@ -8,10 +8,10 @@ from telegram.ext import ContextTypes, MessageHandler, filters
 from sqlalchemy.orm import Session
 
 from bot.config import ADMIN_IDS, RESTAURANT_LAT, RESTAURANT_LON, GEO_RADIUS_M, CONFIRM_WINDOW_MINUTES
-from bot.utils import get_local_now
+from bot.utils import get_local_now, get_local_today
 from bot.database import SessionLocal
 from bot.models import Schedule, Confirmation
-from bot.services.geo_validator import is_location_valid
+from bot.services.geo_validator import is_location_valid, get_distance_m
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +53,21 @@ def get_active_schedules(session: Session, chat_date: date, chat_time: time) -> 
     return result
 
 
+def _username_matches(schedule_username: str, telegram_username: str) -> bool:
+    """Сопоставление username: @user, user, имя — гибко."""
+    s = (schedule_username or "").strip().lower().lstrip("@")
+    t = (telegram_username or "").strip().lower().lstrip("@")
+    if not s or not t:
+        return False
+    return s == t or s in t or t in s
+
+
 def get_schedule_for_late(session: Session, chat_date: date, chat_time: time, username: str) -> Schedule | None:
     """Находит смену для пользователя, если он подтверждает с опозданием (после окна)."""
-    all_today = session.query(Schedule).filter(
-        Schedule.date == chat_date,
-        Schedule.username.ilike(f"%{username}%"),
-    ).all()
+    all_today = session.query(Schedule).filter(Schedule.date == chat_date).all()
     for s in all_today:
+        if not _username_matches(s.username, username):
+            continue
         start = s.shift_start
         end_min = start.hour * 60 + start.minute + CONFIRM_WINDOW_MINUTES
         end_h, end_m = divmod(end_min, 60)
@@ -99,8 +107,13 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     chat_date = now.date()
     chat_time = now.time()
 
-    if not is_location_valid(loc.latitude, loc.longitude, RESTAURANT_LAT, RESTAURANT_LON, GEO_RADIUS_M):
-        await update.message.reply_text("❌ Геолокация не в радиусе ресторана. Подойдите ближе к месту работы.")
+    dist_m = get_distance_m(loc.latitude, loc.longitude, RESTAURANT_LAT, RESTAURANT_LON)
+    if dist_m > GEO_RADIUS_M:
+        logger.warning("Геолокация вне радиуса: %s, расстояние %.0f м, лимит %s м", username, dist_m, GEO_RADIUS_M)
+        await update.message.reply_text(
+            f"❌ Геолокация не в радиусе ресторана (вы на расстоянии ~{int(dist_m)} м, нужно в пределах {GEO_RADIUS_M} м). "
+            "Подойдите ближе к месту работы."
+        )
         return
 
     with get_db() as session:
@@ -126,13 +139,22 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 session.add(conf)
                 await update.message.reply_text(f"⚠️ Принято с опозданием на {late_min} мин.")
                 return
-            await update.message.reply_text("❌ Сейчас не окно подтверждения для вашей смены.")
+            # Проверяем, есть ли пользователь в расписании на сегодня
+            all_today = session.query(Schedule).filter(Schedule.date == chat_date).all()
+            user_in_schedule = any(_username_matches(s.username, username) for s in all_today)
+            if user_in_schedule:
+                await update.message.reply_text(
+                    "❌ Окно подтверждения для вашей смены уже закрыто. "
+                    "Обратитесь к администратору для ручной отметки."
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ Вы не в расписании на сегодня или ваш @username не совпадает с записью в графике."
+                )
             return
 
         for schedule in schedules:
-            s_user = schedule.username.lstrip("@").lower()
-            u_user = username.lstrip("@").lower()
-            if s_user != u_user:
+            if not _username_matches(schedule.username, username):
                 continue
             if already_confirmed(session, schedule.id):
                 await update.message.reply_text("✅ Вы уже подтвердили присутствие.")

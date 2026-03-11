@@ -24,3 +24,8 @@ def is_location_valid(
     """Проверяет, что точка в радиусе от ресторана."""
     dist = haversine_distance_m(user_lat, user_lon, restaurant_lat, restaurant_lon)
     return dist <= radius_m
+
+
+def get_distance_m(user_lat: float, user_lon: float, restaurant_lat: float, restaurant_lon: float) -> float:
+    """Расстояние до ресторана в метрах."""
+    return haversine_distance_m(user_lat, user_lon, restaurant_lat, restaurant_lon)
