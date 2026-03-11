@@ -7,8 +7,9 @@ from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 from sqlalchemy.orm import Session
 
-from bot.config import ADMIN_IDS, RESTAURANT_LAT, RESTAURANT_LON, GEO_RADIUS_M, CONFIRM_WINDOW_MINUTES
+from bot.config import ADMIN_IDS, RESTAURANT_LAT, RESTAURANT_LON, GEO_RADIUS_M, CONFIRM_WINDOW_MINUTES, TIMEZONE
 from bot.utils import get_local_now, get_local_today
+from zoneinfo import ZoneInfo
 from bot.database import SessionLocal
 from bot.models import Schedule, Confirmation
 from bot.services.geo_validator import is_location_valid, get_distance_m
@@ -79,8 +80,12 @@ def get_schedule_for_late(session: Session, chat_date: date, chat_time: time, us
 
 def calculate_late_minutes(shift_start: time, confirmed_at: datetime) -> int:
     """Минуты опоздания."""
-    deadline = datetime.combine(confirmed_at.date(), shift_start) + timedelta(minutes=CONFIRM_WINDOW_MINUTES)
-    delta = confirmed_at - deadline
+    tz = ZoneInfo(TIMEZONE)
+    # Оба datetime должны быть timezone-aware (иначе TypeError при вычитании)
+    dt = confirmed_at if confirmed_at.tzinfo else confirmed_at.replace(tzinfo=tz)
+    deadline_naive = datetime.combine(dt.date(), shift_start) + timedelta(minutes=CONFIRM_WINDOW_MINUTES)
+    deadline = deadline_naive.replace(tzinfo=tz)
+    delta = dt - deadline
     return max(0, int(delta.total_seconds() / 60))
 
 
@@ -94,6 +99,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         return
     if update.effective_chat.type == "private":
         return
+
+    # Диагностика: видим ли мы геолокацию от этого пользователя
+    user_id = update.effective_user.id
+    uname = update.effective_user.username or update.effective_user.first_name or str(user_id)
+    logger.info("Геолокация получена: user_id=%s, @%s, chat_id=%s", user_id, uname, update.effective_chat.id)
 
     loc = update.message.location
     user_id = update.effective_user.id
