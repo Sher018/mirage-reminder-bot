@@ -75,13 +75,14 @@ async def send_reminders_for_time(shift_start: time, app=None) -> None:
     deadline = f"{end_h:02d}:{end_m:02d}"
 
     # Формат: график смены + просьба отметиться
+    # Важно: ответьте на это сообщение геолокацией — так бот точно получит (даже при Group Privacy)
     text = (
         f"📅 Смена {shift_start.hour:02d}:{shift_start.minute:02d}\n"
         f"• {shift_start.hour:02d}:{shift_start.minute:02d}: {', '.join(usernames)}\n\n"
         f"Подтвердите присутствие:\n"
-        f"• Геолокация — обязательно\n"
+        f"• Геолокация — обязательно (ответьте на это сообщение)\n"
         f"• Фото — по желанию\n\n"
-        f"⏰ До {deadline}"
+        f"⏰ У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены, чтобы отметиться (до {deadline})."
     )
 
     try:
@@ -126,7 +127,8 @@ async def send_late_reminder(shift_start: time) -> None:
     text = (
         f"📅 Смена {shift_start.hour:02d}:{shift_start.minute:02d}\n"
         f"• {shift_start.hour:02d}:{shift_start.minute:02d}: {', '.join(usernames)}\n\n"
-        f"Подтвердите присутствие (геолокация обязательна). До {deadline}!"
+        f"Подтвердите присутствие (ответьте на это сообщение геолокацией). "
+        f"У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены — до {deadline}!"
     )
 
     try:

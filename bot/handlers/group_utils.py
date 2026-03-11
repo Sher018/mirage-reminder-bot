@@ -32,6 +32,7 @@ def _format_schedule_with_request(schedules: list) -> str:
     lines.append("Подтвердите присутствие:")
     lines.append("• Геолокация — обязательно (ответьте на это сообщение)")
     lines.append("• Фото — по желанию")
+    lines.append(f"⏰ У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены, чтобы отметиться.")
     return "\n".join(lines)
 
 

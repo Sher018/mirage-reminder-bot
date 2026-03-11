@@ -149,9 +149,14 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     now = get_local_now()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
-        confirmed_ids = {c.schedule_id for c in session.query(Confirmation).filter(
+        confirmations = session.query(Confirmation).filter(
             Confirmation.schedule_id.in_([s.id for s in schedules])
-        ).all()}
+        ).all()
+        confirmed_ids = {c.schedule_id for c in confirmations}
+        late_minutes_by_schedule = {
+            c.schedule_id: c.late_minutes for c in confirmations
+            if c.status == "late" and c.late_minutes
+        }
 
     if not schedules:
         await update.message.reply_text("📊 Сегодня нет смен в расписании.")
@@ -170,7 +175,10 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         lines.append(f"Смена {t}:")
         for s in by_time[t]:
             icon = _get_status_icon(s, confirmed_ids, now)
-            lines.append(f"  {icon} {s.username}")
+            line = f"  {icon} {s.username}"
+            if s.id in late_minutes_by_schedule:
+                line += f" (опоздание {late_minutes_by_schedule[s.id]} мин)"
+            lines.append(line)
 
     await update.message.reply_text("\n".join(lines))
 
@@ -224,9 +232,14 @@ async def callback_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     now = get_local_now()
     with get_db() as session:
         schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
-        confirmed_ids = {c.schedule_id for c in session.query(Confirmation).filter(
+        confirmations = session.query(Confirmation).filter(
             Confirmation.schedule_id.in_([s.id for s in schedules])
-        ).all()}
+        ).all()
+        confirmed_ids = {c.schedule_id for c in confirmations}
+        late_minutes_by_schedule = {
+            c.schedule_id: c.late_minutes for c in confirmations
+            if c.status == "late" and c.late_minutes
+        }
 
     if not schedules:
         try:
@@ -249,7 +262,10 @@ async def callback_status(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         lines.append(f"Смена {t}:")
         for s in by_time[t]:
             icon = _get_status_icon(s, confirmed_ids, now)
-            lines.append(f"  {icon} {s.username}")
+            line = f"  {icon} {s.username}"
+            if s.id in late_minutes_by_schedule:
+                line += f" (опоздание {late_minutes_by_schedule[s.id]} мин)"
+            lines.append(line)
 
     try:
         await query.edit_message_text("\n".join(lines))
