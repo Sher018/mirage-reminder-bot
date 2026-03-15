@@ -152,6 +152,10 @@ def _clear_sent_cache_if_new_day(today: date) -> None:
         _sent_first_reminder = set()
 
 
+# Окно для первого напоминания: первые N минут после начала смены (чтобы не пропустить при сбое)
+REMINDER_WINDOW_MINUTES = 5
+
+
 async def job_reminders() -> None:
     """Проверяет расписание и отправляет напоминания: в начале смены и через 7 мин тем, кто не подтвердил."""
     now = get_local_now()
@@ -171,10 +175,19 @@ async def job_reminders() -> None:
         logger.debug("job_reminders: нет смен на %s (локальное время %s)", today, now.strftime("%H:%M"))
         return
 
+    chat_id = get_group_chat_id()
+    if not chat_id:
+        logger.warning(
+            "job_reminders: группа не задана. Смены на %s в %s — напоминания не отправляются. /setgroup или GROUP_ID в .env",
+            today,
+            [t.strftime("%H:%M") for t in times_list],
+        )
+        return
+
     for t in times_list:
         start_min = t.hour * 60 + t.minute
-        # В начале смены (или в первые 2 мин) — первое напоминание
-        if start_min <= current_min < start_min + 2:
+        # В начале смены (первые REMINDER_WINDOW_MINUTES мин) — первое напоминание
+        if start_min <= current_min < start_min + REMINDER_WINDOW_MINUTES:
             if (today, t) not in _sent_first_reminder:
                 await send_reminders_for_time(t)
                 _sent_first_reminder.add((today, t))
