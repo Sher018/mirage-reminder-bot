@@ -19,7 +19,7 @@ from bot.handlers.schedule import schedule_command, receive_document, receive_we
 from bot.handlers.confirmations import handle_location, handle_photo
 from bot.handlers.today_status import cmd_today, cmd_status, cmd_next_days, callback_button, get_reply_keyboard, BUTTON_TO_CMD, BUTTON_TEXTS
 from bot.handlers.setgroup import setgroup_command
-from bot.handlers.group_utils import groupid_command, test_command, check_command, remind_command, remind_tomorrow_command
+from bot.handlers.group_utils import groupid_command, test_command, test_reminder_command, check_command, remind_command, remind_tomorrow_command
 from bot.services.scheduler import setup_scheduler
 
 _log("Модули загружены.")
@@ -68,6 +68,7 @@ def main() -> None:
             BotCommand("remind_tomorrow", "Напоминание на завтра в группу"),
             BotCommand("setgroup", "Сохранить группу (в группе)"),
             BotCommand("test", "Тест отправки в группу"),
+            BotCommand("test_reminder", "Тест напоминания за 5 мин до смены"),
             BotCommand("check", "Проверка настроек"),
         ])
 
@@ -91,6 +92,7 @@ def main() -> None:
     app.add_handler(CommandHandler("setgroup", setgroup_command))
     app.add_handler(CommandHandler("groupid", groupid_command))
     app.add_handler(CommandHandler("test", test_command))
+    app.add_handler(CommandHandler("test_reminder", test_reminder_command))
     app.add_handler(CommandHandler("next", cmd_next_days))
     app.add_handler(CommandHandler("check", check_command))
     app.add_handler(CommandHandler("remind", remind_command))

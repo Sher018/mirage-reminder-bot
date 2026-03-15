@@ -8,7 +8,7 @@ from telegram.ext import ContextTypes, CommandHandler
 from bot.config import ADMIN_IDS, CONFIRM_WINDOW_MINUTES
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule
-from bot.services.scheduler import get_group_chat_id
+from bot.services.scheduler import get_group_chat_id, send_reminders_for_time
 from bot.utils import get_local_today
 
 logger = logging.getLogger(__name__)
@@ -129,6 +129,48 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f"❌ Ошибка: {e}{hint}")
 
 
+async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Тест: отправляет в группу то же напоминание, что бот шлёт за 5 мин до смены (для проверки рассылки)."""
+    if not update.effective_user or not update.message:
+        return
+    if not is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ Только для администратора.")
+        return
+
+    chat_id = get_group_chat_id()
+    if not chat_id:
+        await update.message.reply_text("❌ Группа не сохранена. Выполните /setgroup в группе.")
+        return
+
+    init_db()
+    today = get_local_today()
+    session = SessionLocal()
+    first_shift = (
+        session.query(Schedule.shift_start)
+        .filter(Schedule.date == today)
+        .order_by(Schedule.shift_start)
+        .limit(1)
+        .first()
+    )
+    session.close()
+
+    if not first_shift:
+        await update.message.reply_text(
+            "📋 Сегодня нет смен в расписании. Загрузите расписание через /schedule, затем снова /test_reminder."
+        )
+        return
+
+    shift_start = first_shift[0]
+    try:
+        await send_reminders_for_time(shift_start, app=context.application)
+        await update.message.reply_text(
+            f"✅ Тестовое напоминание отправлено в группу (как за 5 мин до смены {shift_start.hour:02d}:{shift_start.minute:02d})."
+        )
+    except Exception as e:
+        logger.exception("Ошибка тестового напоминания: %s", e)
+        await update.message.reply_text(f"❌ Ошибка: {e}")
+
+
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Отправляет в группу график работы + просьбу отметиться. Работает в любое время."""
     if not update.effective_user or not update.message:
@@ -212,8 +254,9 @@ async def check_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         "⚠️ **Group Privacy** (в @BotFather):\n"
         "Должен быть **выключен** (Turn off).\n"
         "Иначе бот не получит геолокацию от работников.\n\n"
-        "🧪 **Тест связи:** пусть работник напишет в группе «тест» или «проверка» — бот ответит, если получает сообщения.\n\n"
-        "💡 **Обходной путь:** пусть работники **отвечают на сообщение бота** геолокацией.\n\n"
-        "Команда /test — проверить отправку в группу."
+        "🧪 **Тест связи:** пусть работник напишет в группе «тест» или «проверка» — бот ответит.\n\n"
+        "🧪 **Тест напоминания:** /test_reminder — отправит в группу то же сообщение, что за 5 мин до смены.\n\n"
+        "💡 Пусть работники **отвечают на сообщение бота** геолокацией.\n\n"
+        "/test — тест отправки в группу."
     )
     await update.message.reply_text(text, parse_mode="Markdown")
