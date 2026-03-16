@@ -65,24 +65,22 @@ async def send_reminders_for_time(shift_start: time, app=None) -> None:
             Schedule.date == today,
             Schedule.shift_start == shift_start,
         ).all()
+        usernames = [s.username for s in schedules]
 
     if not schedules:
         return
-
-    usernames = [s.username for s in schedules]
     end_min = shift_start.hour * 60 + shift_start.minute + CONFIRM_WINDOW_MINUTES
     end_h, end_m = divmod(end_min, 60)
     deadline = f"{end_h:02d}:{end_m:02d}"
 
-    # Формат: график смены + просьба отметиться
-    # Важно: ответьте на это сообщение геолокацией — так бот точно получит (даже при Group Privacy)
+    # Напоминание за 5 мин до смены: список работников + просьба отметиться
     text = (
-        f"📅 Смена {shift_start.hour:02d}:{shift_start.minute:02d}\n"
+        f"⏰ Через {REMINDER_BEFORE_MINUTES} мин начинается смена {shift_start.hour:02d}:{shift_start.minute:02d}\n\n"
+        f"📅 На смене:\n"
         f"• {shift_start.hour:02d}:{shift_start.minute:02d}: {', '.join(usernames)}\n\n"
-        f"Подтвердите присутствие:\n"
-        f"• Геолокация — обязательно (ответьте на это сообщение)\n"
-        f"• Фото — по желанию\n\n"
-        f"⏰ У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены, чтобы отметиться (до {deadline})."
+        f"Подтвердите присутствие (геолокация обязательна, можно ответить на это сообщение):\n"
+        f"• Отметиться можно до {deadline} ({CONFIRM_WINDOW_MINUTES} мин с начала смены).\n"
+        f"• Фото — по желанию."
     )
 
     try:
@@ -111,15 +109,14 @@ async def send_late_reminder(shift_start: time) -> None:
             Schedule.date == today,
             Schedule.shift_start == shift_start,
         ).all()
+        schedule_ids = [s.id for s in schedules]
         confirmed_ids = {c.schedule_id for c in session.query(Confirmation).filter(
-            Confirmation.schedule_id.in_([s.id for s in schedules])
+            Confirmation.schedule_id.in_(schedule_ids),
         ).all()}
+        usernames = [s.username for s in schedules if s.id not in confirmed_ids]
 
-    not_confirmed = [s for s in schedules if s.id not in confirmed_ids]
-    if not not_confirmed:
+    if not usernames:
         return
-
-    usernames = [s.username for s in not_confirmed]
     end_min = shift_start.hour * 60 + shift_start.minute + CONFIRM_WINDOW_MINUTES
     end_h, end_m = divmod(end_min, 60)
     deadline = f"{end_h:02d}:{end_m:02d}"
@@ -152,12 +149,12 @@ def _clear_sent_cache_if_new_day(today: date) -> None:
         _sent_first_reminder = set()
 
 
-# Окно для первого напоминания: первые N минут после начала смены (чтобы не пропустить при сбое)
-REMINDER_WINDOW_MINUTES = 5
+# За сколько минут до начала смены отправить напоминание
+REMINDER_BEFORE_MINUTES = 5
 
 
 async def job_reminders() -> None:
-    """Проверяет расписание и отправляет напоминания: в начале смены и через 7 мин тем, кто не подтвердил."""
+    """Отправляет напоминания: за 5 мин до смены и через 7 мин после начала — тем, кто не подтвердил."""
     now = get_local_now()
     today = get_local_today()
     current_min = now.hour * 60 + now.minute
@@ -172,7 +169,11 @@ async def job_reminders() -> None:
     times_list = [t for (t,) in times]
 
     if not times_list:
-        logger.debug("job_reminders: нет смен на %s (локальное время %s)", today, now.strftime("%H:%M"))
+        logger.info(
+            "job_reminders: нет смен на %s (локальное время %s). Загрузите расписание на эту дату через /schedule.",
+            today,
+            now.strftime("%H:%M"),
+        )
         return
 
     chat_id = get_group_chat_id()
@@ -184,15 +185,28 @@ async def job_reminders() -> None:
         )
         return
 
+    # Диагностика: когда ждать напоминания (раз в 10 мин чтобы не засорять лог)
+    if now.minute % 10 == 0:
+        reminder_minutes = [start_min - REMINDER_BEFORE_MINUTES for start_min in (tt.hour * 60 + tt.minute for tt in times_list)]
+        logger.info(
+            "job_reminders: локальное время %s (минута дня=%s). Напоминания за 5 мин до смены в минуты: %s. Смены: %s",
+            now.strftime("%H:%M"),
+            current_min,
+            reminder_minutes,
+            [t.strftime("%H:%M") for t in times_list],
+        )
+
     for t in times_list:
         start_min = t.hour * 60 + t.minute
-        # В начале смены (первые REMINDER_WINDOW_MINUTES мин) — первое напоминание
-        if start_min <= current_min < start_min + REMINDER_WINDOW_MINUTES:
+        # За REMINDER_BEFORE_MINUTES мин до начала смены — напоминание со списком и просьбой отметиться
+        reminder_at_min = start_min - REMINDER_BEFORE_MINUTES
+        if reminder_at_min >= 0 and current_min == reminder_at_min:
             if (today, t) not in _sent_first_reminder:
+                logger.info("Отправка напоминания за 5 мин до смены %s", t.strftime("%H:%M"))
                 await send_reminders_for_time(t)
                 _sent_first_reminder.add((today, t))
             break
-        # Через 7 мин — повторное напоминание тем, кто не подтвердил
+        # Через 7 мин после начала — повторное напоминание тем, кто не подтвердил
         if current_min == start_min + LATE_REMINDER_MINUTES:
             await send_late_reminder(t)
             break
