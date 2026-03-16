@@ -14,6 +14,7 @@ from bot.config import (
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule, Confirmation, WorkGroup
 from bot.utils import get_local_today, get_local_now
+from bot.handlers.group_utils import get_today_reminder_text_for_shift
 
 logger = logging.getLogger(__name__)
 
@@ -196,15 +197,26 @@ async def job_reminders() -> None:
             [t.strftime("%H:%M") for t in times_list],
         )
 
+    # Окно 2 минуты для напоминания "за 5 мин до смены", чтобы не пропустить при задержке планировщика
+    REMINDER_WINDOW = 2
+
     for t in times_list:
         start_min = t.hour * 60 + t.minute
-        # За REMINDER_BEFORE_MINUTES мин до начала смены — напоминание со списком и просьбой отметиться
+        # За REMINDER_BEFORE_MINUTES мин до начала смены — напоминание (в течение REMINDER_WINDOW минут)
         reminder_at_min = start_min - REMINDER_BEFORE_MINUTES
-        if reminder_at_min >= 0 and current_min == reminder_at_min:
+        if reminder_at_min >= 0 and reminder_at_min <= current_min < reminder_at_min + REMINDER_WINDOW:
             if (today, t) not in _sent_first_reminder:
-                logger.info("Отправка напоминания за 5 мин до смены %s", t.strftime("%H:%M"))
-                await send_reminders_for_time(t)
-                _sent_first_reminder.add((today, t))
+                text = get_today_reminder_text_for_shift(t)
+                if text:
+                    logger.info("Отправка напоминания за 5 мин до смены %s (как кнопка «Напоминание») (минута %s)", t.strftime("%H:%M"), current_min)
+                    try:
+                        await application.bot.send_message(chat_id=chat_id, text=text)
+                        _sent_first_reminder.add((today, t))
+                        logger.info("Напоминание отправлено в группу %s: за 5 мин до смены %s", chat_id, t.strftime("%H:%M"))
+                    except Exception as e:
+                        logger.exception("Ошибка отправки напоминания в группу %s: %s", chat_id, e)
+                else:
+                    logger.warning("Нет расписания на сегодня — напоминание за 5 мин до %s не отправлено", t.strftime("%H:%M"))
             break
         # Через 7 мин после начала — повторное напоминание тем, кто не подтвердил
         if current_min == start_min + LATE_REMINDER_MINUTES:

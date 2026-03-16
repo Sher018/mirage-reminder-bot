@@ -1,21 +1,21 @@
 """Утилиты для работы с группой: /groupid, /test, /remind."""
 import logging
-from datetime import timedelta
+from datetime import timedelta, time as time_type
 
 from telegram import Update
 from telegram.ext import ContextTypes, CommandHandler
 
 from bot.config import ADMIN_IDS, CONFIRM_WINDOW_MINUTES
 from bot.database import SessionLocal, init_db
-from bot.models import Schedule
-from bot.services.scheduler import get_group_chat_id, send_reminders_for_time
+from bot.models import Schedule, Confirmation
+from bot.services.scheduler import get_group_chat_id
 from bot.utils import get_local_today
 
 logger = logging.getLogger(__name__)
 
 
 def _format_schedule_with_request(schedules: list) -> str:
-    """Формирует сообщение: график работы + просьба отметиться."""
+    """Формирует сообщение: график работы + просьба отметиться (как кнопка «Напоминание»)."""
     by_time = {}
     for s in schedules:
         key = s.shift_start.strftime("%H:%M")
@@ -34,6 +34,61 @@ def _format_schedule_with_request(schedules: list) -> str:
     lines.append("• Фото — по желанию")
     lines.append(f"⏰ У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены, чтобы отметиться.")
     return "\n".join(lines)
+
+
+def get_today_reminder_text() -> str | None:
+    """Текст напоминания на сегодня (как кнопка «Напоминание»). None если смен нет."""
+    today = get_local_today()
+    session = SessionLocal()
+    try:
+        schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
+        if not schedules:
+            return None
+        return _format_schedule_with_request(schedules)
+    finally:
+        session.close()
+
+
+def get_today_reminder_text_for_shift(reminder_for_shift_start: time_type) -> str | None:
+    """
+    Текст напоминания на сегодня перед сменой reminder_for_shift_start.
+    В прошедших сменах (shift_start < reminder_for_shift_start) показываются только
+    работники, которые ещё не отметились; в текущей и будущих — все.
+    """
+    today = get_local_today()
+    session = SessionLocal()
+    try:
+        schedules = session.query(Schedule).filter(Schedule.date == today).order_by(Schedule.shift_start).all()
+        if not schedules:
+            return None
+        schedule_ids = [s.id for s in schedules]
+        confirmations = session.query(Confirmation).filter(Confirmation.schedule_id.in_(schedule_ids)).all()
+        confirmed_ids = {c.schedule_id for c in confirmations}
+
+        # По каждой смене (времени) — список имён: все или только не отметившиеся
+        by_time: dict[str, list[str]] = {}
+        for s in schedules:
+            key = s.shift_start.strftime("%H:%M")
+            if key not in by_time:
+                by_time[key] = []
+            is_past_shift = s.shift_start < reminder_for_shift_start
+            if is_past_shift and s.id in confirmed_ids:
+                continue  # прошедшая смена, уже отметился — не показываем
+            by_time[key].append(s.username)
+
+        lines = ["📅 Сегодня работают:\n"]
+        for t in sorted(by_time.keys()):
+            users = by_time[t]
+            lines.append(f"• {t}: {', '.join(users) if users else '— все отметились'}")
+
+        lines.append("")
+        lines.append("Подтвердите присутствие:")
+        lines.append("• Геолокация — обязательно (ответьте на это сообщение)")
+        lines.append("• Фото — по желанию")
+        lines.append(f"⏰ У вас {CONFIRM_WINDOW_MINUTES} мин с начала смены, чтобы отметиться.")
+        return "\n".join(lines)
+    finally:
+        session.close()
 
 
 def _format_tomorrow_reminder(schedules: list) -> str:
@@ -129,8 +184,25 @@ async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(f"❌ Ошибка: {e}{hint}")
 
 
+def _parse_shift_time(arg: str) -> time_type | None:
+    """Парсит время из строки вида 09:00, 12:00, 15:00."""
+    try:
+        parts = arg.strip().split(":")
+        if len(parts) != 2:
+            return None
+        h, m = int(parts[0]), int(parts[1])
+        if 0 <= h <= 23 and 0 <= m <= 59:
+            return time_type(h, m)
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
 async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Тест: отправляет в группу то же напоминание, что бот шлёт за 5 мин до смены (для проверки рассылки)."""
+    """Тест: отправляет в группу то же напоминание, что бот шлёт за 5 мин до смены.
+    Без аргументов — как перед первой сменой (все в списке).
+    С временем — как перед этой сменой: /test_reminder 12:00 (в 9:00 будут только не отметившиеся).
+    """
     if not update.effective_user or not update.message:
         return
     if not is_admin(update.effective_user.id):
@@ -145,24 +217,41 @@ async def test_reminder_command(update: Update, context: ContextTypes.DEFAULT_TY
     init_db()
     today = get_local_today()
     session = SessionLocal()
-    first_shift = (
-        session.query(Schedule.shift_start)
-        .filter(Schedule.date == today)
-        .order_by(Schedule.shift_start)
-        .limit(1)
-        .first()
-    )
+
+    shift_start: time_type | None = None
+    if context.args and len(context.args) >= 1:
+        shift_start = _parse_shift_time(context.args[0])
+        if shift_start is None:
+            await update.message.reply_text(
+                "❌ Укажите время смены, например: /test_reminder 12:00"
+            )
+            session.close()
+            return
+
+    if shift_start is None:
+        first = (
+            session.query(Schedule.shift_start)
+            .filter(Schedule.date == today)
+            .order_by(Schedule.shift_start)
+            .limit(1)
+            .first()
+        )
+        if not first:
+            session.close()
+            await update.message.reply_text(
+                "📋 Сегодня нет смен в расписании. Загрузите расписание через /schedule, затем снова /test_reminder."
+            )
+            return
+        shift_start = first[0]
     session.close()
 
-    if not first_shift:
-        await update.message.reply_text(
-            "📋 Сегодня нет смен в расписании. Загрузите расписание через /schedule, затем снова /test_reminder."
-        )
+    text = get_today_reminder_text_for_shift(shift_start)
+    if not text:
+        await update.message.reply_text("📋 Нет расписания на сегодня. Загрузите через /schedule.")
         return
 
-    shift_start = first_shift[0]
     try:
-        await send_reminders_for_time(shift_start, app=context.application)
+        await context.application.bot.send_message(chat_id=chat_id, text=text)
         await update.message.reply_text(
             f"✅ Тестовое напоминание отправлено в группу (как за 5 мин до смены {shift_start.hour:02d}:{shift_start.minute:02d})."
         )
