@@ -14,7 +14,6 @@ from bot.config import (
 from bot.database import SessionLocal, init_db
 from bot.models import Schedule, Confirmation, WorkGroup
 from bot.utils import get_local_today, get_local_now
-from bot.handlers.group_utils import get_today_reminder_text_for_shift
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +205,7 @@ async def job_reminders() -> None:
         reminder_at_min = start_min - REMINDER_BEFORE_MINUTES
         if reminder_at_min >= 0 and reminder_at_min <= current_min < reminder_at_min + REMINDER_WINDOW:
             if (today, t) not in _sent_first_reminder:
+                from bot.handlers.group_utils import get_today_reminder_text_for_shift
                 text = get_today_reminder_text_for_shift(t)
                 if text:
                     logger.info("Отправка напоминания за 5 мин до смены %s (как кнопка «Напоминание») (минута %s)", t.strftime("%H:%M"), current_min)
